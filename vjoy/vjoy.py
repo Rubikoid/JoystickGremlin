@@ -179,7 +179,7 @@ class Axis:
         # If this is not the case our value setter needs to change
         if self._min_value != 0:
             raise VJoyError("vJoy axis minimum value is not 0  - {}".format(
-                    _error_string(self.vjoy_id, self.axis_id, self._min_value)
+                _error_string(self.vjoy_id, self.axis_id, self._min_value)
             ))
 
     def set_response_curve(self, spline_type, control_points):
@@ -476,7 +476,7 @@ class VJoy:
         if not VJoyInterface.vJoyEnabled():
             logging.getLogger("system").error("vJoy is not currently running")
             raise VJoyError("vJoy is not currently running")
-        if VJoyInterface.GetvJoyVersion() != 0x218:
+        if VJoyInterface.GetvJoyVersion() < 0x218:
             logging.getLogger("system").error(
                 "Running incompatible vJoy version, 2.1.8 required"
             )
@@ -514,6 +514,9 @@ class VJoy:
         )
         self._keep_alive_timer.start()
 
+        VJoyInterface.set_ffb_event_callback(self.fbb_callback, vjoy_id)
+        logging.getLogger("system").info("FFB registred")
+
         # Reset all controls
         self.reset()
 
@@ -535,11 +538,15 @@ class VJoy:
                 logging.getLogger("system").error(
                     "Failed to re-acquire the vJoy device - vid: {}".format(
                         self.vjoy_id
-                ))
+                    ))
                 raise VJoyError(
                     "Failed to re-acquire the vJoy device - vid: {}".format(
                         self.vjoy_id
-                ))
+                    ))
+
+    def fbb_callback(self, ffb_packet, userdata):
+        print(f"Recvd ffb callb {ffb_packet} {userdata}")
+        return
 
     @property
     def axis_count(self):
@@ -799,8 +806,8 @@ class VJoy:
         # an error
         if VJoyInterface.GetVJDDiscPovNumber(self.vjoy_id) > 0:
             error_msg = "vJoy is configured incorrectly. \n\n" \
-                    "Please ensure hats are configured as 'Continuous' " \
-                    "rather then '4 Directions'."
+                "Please ensure hats are configured as 'Continuous' " \
+                "rather then '4 Directions'."
             logging.getLogger("system").error(error_msg)
             raise VJoyError(error_msg)
         # for hat_id in range(1, VJoyInterface.GetVJDDiscPovNumber(self.vjoy_id)+1):

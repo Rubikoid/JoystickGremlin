@@ -34,6 +34,94 @@ class VJoyState(enum.Enum):
     Unknown = 4     # Unknown type of error
 
 
+class FFBPType(enum.Enum):
+
+    """Enumeration of ffb"""
+
+    # Write
+    PT_EFFREP = 0x01,  # // Usage Set Effect Report
+    PT_ENVREP = 0x02,  # // Usage Set Envelope Report
+    PT_CONDREP = 0x03,  # // Usage Set Condition Report
+    PT_PRIDREP = 0x04,  # // Usage Set Periodic Report
+    PT_CONSTREP = 0x05,  # // Usage Set Constant Force Report
+    PT_RAMPREP = 0x06,  # // Usage Set Ramp Force Report
+    PT_CSTMREP = 0x07,  # // Usage Custom Force Data Report
+    PT_SMPLREP = 0x08,  # // Usage Download Force Sample
+    PT_EFOPREP = 0x0A,  # // Usage Effect Operation Report
+    PT_BLKFRREP = 0x0B,  # // Usage PID Block Free Report
+    PT_CTRLREP = 0x0C,  # // Usage PID Device Control
+    PT_GAINREP = 0x0D,  # // Usage Device Gain Report
+    PT_SETCREP = 0x0E,  # // Usage Set Custom Force Report
+
+    # // Feature
+    PT_NEWEFREP = 0x01+0x10,  # // Usage Create New Effect Report
+    PT_BLKLDREP = 0x02+0x10,  # // Usage Block Load Report
+    PT_POOLREP = 0x03+0x10,  # // Usage PID Pool Report
+
+    @staticmethod
+    def from_ctype(value):
+        """Returns the enum type corresponding to the provided value.
+
+        Parameters
+        ==========
+        value : int
+            The integer value
+
+        Returns
+        =======
+        InputType
+            Enum value representing the correct ffb
+        """
+        if value == 0x01:
+            return FFBPType.PT_EFFREP
+        elif value == 0x02:
+            return FFBPType.PT_ENVREP
+        elif value == 0x03:
+            return FFBPType.PT_CONDREP
+        elif value == 0x04:
+            return FFBPType.PT_PRIDREP
+        elif value == 0x05:
+            return FFBPType.PT_CONSTREP
+        elif value == 0x06:
+            return FFBPType.PT_RAMPREP
+        elif value == 0x07:
+            return FFBPType.PT_CSTMREP
+        elif value == 0x08:
+            return FFBPType.PT_SMPLREP
+        elif value == 0x0A:
+            return FFBPType.PT_EFOPREP
+        elif value == 0x0B:
+            return FFBPType.PT_BLKFRREP
+        elif value == 0x0C:
+            return FFBPType.PT_CTRLREP
+        elif value == 0x0D:
+            return FFBPType.PT_GAINREP
+        elif value == 0x0E:
+            return FFBPType.PT_SETCREP
+        elif value == 0x01+0x10:
+            return FFBPType.PT_NEWEFREP
+        elif value == 0x02+0x10:
+            return FFBPType.PT_BLKLDREP
+        elif value == 0x03+0x10:
+            return FFBPType.PT_POOLREP
+        else:
+            raise GremlinError("Invalid ffb type value {:d}".format(value))
+
+
+class _FFB_DATA(ctypes.Structure):
+
+    """Mapping for the vJOY FFB_DATA C structure."""
+
+    _fields_ = [
+        ("size", ctypes.c_ulong),
+        ("cmd", ctypes.c_ulong),
+        ("data", ctypes.c_char_p)
+    ]
+
+
+C_FFB_CALLBACK = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p)
+
+
 class VJoyInterface:
 
     """Allows low level interaction with VJoy devices via ctypes."""
@@ -49,6 +137,9 @@ class VJoyInterface:
         raise GremlinError("Unable to locate vjoy dll")
 
     vjoy_dll = ctypes.cdll.LoadLibrary(dll_path)
+
+    # ffb callback
+    ffb_callback_fn = None
 
     # Declare argument and return types for all the functions
     # exposed by the dll
@@ -161,7 +252,44 @@ class VJoyInterface:
             "arguments": [ctypes.c_ulong, ctypes.c_uint, ctypes.c_ubyte],
             "returns": ctypes.c_bool
         },
+
+        # FFB Functions
+        "FfbStart": { # DEPRICATED
+            "arguments": [ctypes.c_uint],
+            "returns": ctypes.c_bool
+        },
+        "FfbStop": { # DEPRICATED
+            "arguments": [ctypes.c_uint],
+            "returns": ctypes.c_bool
+        },
+        "IsDeviceFfb": {
+            "arguments": [ctypes.c_uint],
+            "returns": ctypes.c_bool
+        },
+
+        "FfbRegisterGenCB": {
+            "arguments": [C_FFB_CALLBACK, ctypes.c_void_p],
+            "returns": None
+        },
+
+        "Ffb_h_Type": {
+            "arguments": [ctypes.c_void_p, ctypes.c_void_p],
+            "returns": ctypes.c_uint32
+        },
     }
+
+    @staticmethod
+    def set_ffb_event_callback(callback, vjoy_id):
+        """Sets the callback function to use for input events.
+
+        Parameters
+        ==========
+        callback : callable
+            Function to execute when an ffb.
+        """
+
+        VJoyInterface.ffb_callback_fn = C_FFB_CALLBACK(callback)
+        VJoyInterface.vjoy_dll.FfbRegisterGenCB(VJoyInterface.ffb_callback_fn, ctypes.byref(ctypes.c_uint(vjoy_id)))
 
     @classmethod
     def initialize(cls):
